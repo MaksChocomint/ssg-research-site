@@ -78,3 +78,25 @@ ssh-keygen -lf helios_kh
 **Решение.** В секрет записана строка `[helios.cs.ifmo.ru]:2222 ssh-ed25519 AAAA…` из
 Git Bash. Такую же строку можно взять из своего `~/.ssh/known_hosts` после ручного входа
 с проверкой отпечатка.
+
+## 4. `deploy-pages`: Failed to create deployment (status: 404)
+
+**Ошибка.** Первый запуск после push: сборка прошла, а job `deploy-pages` упал:
+
+```text
+Error: Failed to create deployment (status: 404) with build version a9e98c7...
+Ensure GitHub Pages has been enabled: https://github.com/MaksChocomint/ssg-research-site/settings/pages
+HttpError: Not Found
+```
+
+![Первый запуск](img/run-pages-404.png)
+
+**Гипотеза.** Pages в репозитории не включён, поэтому API GitHub не знает, куда публиковать
+артефакт, и отвечает 404. Сам артефакт (`upload-pages-artifact`) загрузился нормально.
+
+**Проверка.** Открыл **Settings → Pages**: источник публикации не был выбран.
+
+**Решение.** Выбрал **Source = GitHub Actions** и перезапустил упавшие jobs
+(**Re-run failed jobs**). Второй попыткой `deploy-pages` прошёл, healthcheck подтвердил
+версию `a9e98c7` на `https://makschocomint.github.io/ssg-research-site/`.
+
