@@ -1,0 +1,179 @@
+name: Site
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      rollback:
+        description: "Откатить сайт на Helios к предыдущей версии"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  PAGES_URL: https://makschocomint.github.io/ssg-research-site/
+  HELIOS_URL: https://se.ifmo.ru/~s564789/
+  HELIOS_HOST: helios.cs.ifmo.ru
+  HELIOS_PORT: "2222"
+  HELIOS_USER: s564789
+  CONTROL_STRING: Генераторы статических сайтов
+
+jobs:
+  # Сборка с --strict: битая ссылка или предупреждение роняет job
+  build:
+    if: ${{ !inputs.rollback }}
+    runs-on: ubuntu-latest
+    steps:
+      # Сторонние actions зафиксированы по SHA коммита, тег указан в комментарии
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Build (strict)
+        run: |
+          SITE_URL="$PAGES_URL" uv run mkdocs build --strict
+          echo "$GITHUB_SHA" > site/version.txt
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site/
+
+  # GitHub Pages: только с main и не для pull request
+  deploy-pages:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+      - name: Healthcheck
+        run: |
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -o page.html -w '%{http_code}' "$PAGES_URL")
+            version=$(curl -s "${PAGES_URL}version.txt")
+            if [ "$code" = 200 ] && grep -q "$CONTROL_STRING" page.html && [ "$version" = "$GITHUB_SHA" ]; then
+              echo "OK: $PAGES_URL"
+              exit 0
+            fi
+            echo "Попытка $i: code=$code version=$version"
+            sleep 10
+          done
+          exit 1
+
+  # Helios: main -> корень public_html, остальные ветки -> public_html/preview/<ветка>/
+  # Для pull request не запускается: из форков секреты недоступны
+  deploy-helios:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    concurrency:
+      group: helios-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+
+      - name: Choose target directory
+        run: |
+          if [ "$GITHUB_REF_NAME" = main ]; then
+            echo "SLUG=main" >> "$GITHUB_ENV"
+            echo "SUBDIR=" >> "$GITHUB_ENV"
+          else
+            slug=$(echo "$GITHUB_REF_NAME" | sed 's/[^A-Za-z0-9._-]/-/g')
+            echo "SLUG=$slug" >> "$GITHUB_ENV"
+            echo "SUBDIR=preview/$slug/" >> "$GITHUB_ENV"
+          fi
+
+      # Сайт лежит в подкаталоге /~s564789/, поэтому site_url другой, чем на Pages
+      - name: Build for Helios
+        run: |
+          uv sync --locked
+          SITE_URL="${HELIOS_URL}${SUBDIR}" uv run mkdocs build --strict
+          echo "$GITHUB_SHA" > site/version.txt
+
+      # Ключ и known_hosts берутся из секретов; проверка ключа хоста не отключается
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.HELIOS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.HELIOS_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          echo "SSH=ssh -i $HOME/.ssh/deploy_key -p $HELIOS_PORT -o BatchMode=yes" >> "$GITHUB_ENV"
+
+      # Текущая версия копируется в site-backup/<ветка>/ — из неё делается откат
+      - name: Backup current version
+        run: |
+          $SSH "$HELIOS_USER@$HELIOS_HOST" \
+            "mkdir -p public_html/$SUBDIR site-backup/$SLUG && rsync -a --delete --exclude preview/ public_html/$SUBDIR site-backup/$SLUG/"
+
+      # --exclude preview/ — чтобы выкладка main не удаляла preview-сборки веток
+      - name: Deploy
+        run: |
+          rsync -az --delete --exclude preview/ --chmod=D755,F644 -e "$SSH" \
+            site/ "$HELIOS_USER@$HELIOS_HOST:public_html/$SUBDIR"
+
+      - name: Healthcheck
+        run: |
+          url="${HELIOS_URL}${SUBDIR}"
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o page.html -w '%{http_code}' "$url")
+            version=$(curl -s "${url}version.txt")
+            if [ "$code" = 200 ] && grep -q "$CONTROL_STRING" page.html && [ "$version" = "$GITHUB_SHA" ]; then
+              echo "OK: $url"
+              exit 0
+            fi
+            echo "Попытка $i: code=$code version=$version"
+            sleep 5
+          done
+          exit 1
+
+  # Ручной запуск с rollback=true: вернуть main на Helios к сохранённой копии
+  rollback-helios:
+    if: ${{ inputs.rollback && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: helios-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.HELIOS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.HELIOS_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Restore previous version
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$HELIOS_PORT" -o BatchMode=yes "$HELIOS_USER@$HELIOS_HOST" \
+            "test -f site-backup/main/index.html && rsync -a --delete --exclude preview/ site-backup/main/ public_html/ && cat public_html/version.txt"
+
+      - name: Healthcheck
+        run: |
+          code=$(curl -s -o page.html -w '%{http_code}' "$HELIOS_URL")
+          echo "code=$code, version=$(curl -s "${HELIOS_URL}version.txt")"
+          [ "$code" = 200 ] && grep -q "$CONTROL_STRING" page.html

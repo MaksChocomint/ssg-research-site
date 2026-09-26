@@ -1,0 +1,43 @@
+site_name: Генераторы статических сайтов
+site_description: Отчёт по заданию 3 — публикация результатов исследований с помощью SSG
+site_author: Maksim
+# Адрес зависит от площадки: GitHub Pages или Helios (задаётся в CI через SITE_URL)
+site_url: !ENV [SITE_URL, "https://makschocomint.github.io/ssg-research-site/"]
+repo_url: https://github.com/MaksChocomint/ssg-research-site
+copyright: Текст — CC BY 4.0, код — MIT
+
+theme:
+  name: material
+  language: ru
+  # Не подключать Google Fonts: сайт не должен зависеть от внешних CDN
+  font: false
+  features:
+    - navigation.sections
+    - content.code.copy
+
+plugins:
+  - search:
+      lang: [ru, en]
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      linenums: true
+  - pymdownx.superfences
+  # Вставка файлов из репозитория (текст workflow в отчёте берётся из .github/)
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
+
+nav:
+  - Главная: index.md
+  - Ход работы: workflow.md
+  - "T4. Безопасность доставки": t4.md
+  - "P4. Деплой на Helios": p4.md
+  - Отладка: debugging.md
+  - Вывод: conclusion.md
+  - Лицензии: license.md
