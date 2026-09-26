@@ -49,12 +49,32 @@ uv : Имя "uv" не распознано как имя командлета, �
 
 **Решение.** Перезапустить VS Code (или обновить `$env:Path` в текущей сессии).
 
-## 3. _Заполнить по ходу настройки CI_
+## 3. `ssh-keyscan` в Windows не получает ключ сервера
 
-**Ошибка.** …
+**Ошибка.** Для секрета `HELIOS_KNOWN_HOSTS` нужен ключ сервера. Команда в PowerShell
+ничего не вернула:
 
-**Гипотеза.** …
+```text
+PS> ssh-keyscan -p 2222 helios.cs.ifmo.ru
+# helios.cs.ifmo.ru:2222 SSH-2.0-OpenSSH_10.0 FreeBSD-20250801
+choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com
+```
 
-**Проверка.** …
+**Гипотеза.** Встроенный в Windows OpenSSH (9.5, собран с LibreSSL) предлагает серверу
+алгоритм обмена ключами `sntrup761x25519-sha512`, но сам его не поддерживает. Обычный
+`ssh` при этом подключается, потому что выбирает другой алгоритм (`curve25519-sha256`,
+видно в `ssh -v`).
 
-**Решение.** …
+**Проверка.** Запустил `ssh-keyscan` из Git Bash, там OpenSSH 10.0 на OpenSSL:
+
+```bash
+ssh-keyscan -t ed25519 -p 2222 helios.cs.ifmo.ru > helios_kh
+ssh-keygen -lf helios_kh
+# 256 SHA256:3n1x6Bq0hnfyxrWB/YeQQPaxUkE/GCX2vKKtl0nzGgM [helios.cs.ifmo.ru]:2222 (ED25519)
+```
+
+Ключ получен, отпечаток совпадает с тем, что показывал SSH при первом ручном входе.
+
+**Решение.** В секрет записана строка `[helios.cs.ifmo.ru]:2222 ssh-ed25519 AAAA…` из
+Git Bash. Такую же строку можно взять из своего `~/.ssh/known_hosts` после ручного входа
+с проверкой отпечатка.
