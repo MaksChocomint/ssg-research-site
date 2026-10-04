@@ -113,7 +113,7 @@ $$
 W = W_{\text{site}} + \sum_{i=1}^{n} W_{\text{ext},i} \tag{1} \label{eq:weight}
 $$
 
-Формула \eqref{eq:weight} отрисована MathJax, который лежит на самом сайте
+Формула $\eqref{eq:weight}$ отрисована MathJax, который лежит на самом сайте
 (`javascripts/tex-svg.js`), а не загружается с CDN. Внешние шрифты Google Fonts
 отключены (`font: false`), иконки темы встроены в HTML как SVG — поэтому сайт, включая
 формулы, не зависит от внешних CDN. Проверка и замеры — в разделе [T4](t4.md#no-cdn).
