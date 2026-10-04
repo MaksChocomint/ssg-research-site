@@ -109,10 +109,9 @@ deploy-ключом. Подробно — в разделе [P4](p4.md).
 Для проверки формул на страницу добавлена нумерованная формула. Вес страницы со всеми
 ресурсами складывается из веса самого сайта и внешних ресурсов:
 
-\begin{equation}
-W = W_{\text{site}} + \sum_{i=1}^{n} W_{\text{ext},i}
-\label{eq:weight}
-\end{equation}
+$$
+W = W_{\text{site}} + \sum_{i=1}^{n} W_{\text{ext},i} \tag{1} \label{eq:weight}
+$$
 
 Формула \eqref{eq:weight} отрисована MathJax, который лежит на самом сайте
 (`javascripts/tex-svg.js`), а не загружается с CDN. Внешние шрифты Google Fonts
