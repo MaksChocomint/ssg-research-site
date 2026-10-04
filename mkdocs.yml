@@ -28,10 +28,17 @@ markdown_extensions:
   - pymdownx.highlight:
       linenums: true
   - pymdownx.superfences
+  # Формулы LaTeX; MathJax подключается локально, без CDN
+  - pymdownx.arithmatex:
+      generic: true
   # Вставка файлов из репозитория (текст workflow в отчёте берётся из .github/)
   - pymdownx.snippets:
       base_path: ["."]
       check_paths: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - javascripts/tex-svg.js
 
 nav:
   - Главная: index.md

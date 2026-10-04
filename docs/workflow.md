@@ -2,6 +2,23 @@
 
 ## 1. Окружение и зависимости
 
+Проверка Python, pip и virtualenv:
+
+```text
+> python --version
+Python 3.13.5
+> python -m pip --version
+pip 26.0.1 from C:\Users\maxpr\AppData\Roaming\Python\Python313\site-packages\pip (python 3.13)
+> python -m virtualenv --version
+C:\Python313\python.exe: No module named virtualenv
+> uvx virtualenv --version
+virtualenv 21.14.5
+```
+
+Глобально virtualenv не установлен. Вместо него используется uv: он создаёт такое же
+виртуальное окружение `.venv`, а сам virtualenv при необходимости запускается через
+`uvx` без установки в систему.
+
 Для управления окружением использовался [uv](https://docs.astral.sh/uv/): он сам ставит
 нужную версию Python, создаёт виртуальное окружение `.venv` и фиксирует версии всех пакетов
 в `uv.lock`.
@@ -15,7 +32,11 @@ uv add mkdocs-material
 В CI используется `uv sync --locked`: если lock-файл не соответствует `pyproject.toml`,
 сборка падает, а не ставит другие версии.
 
-В `.gitignore` добавлены `.venv/`, каталог сборки `site/` и кэши.
+Окружение создаётся в `.venv` командой `uv sync`. Активировать его можно вручную
+(`.venv\Scripts\Activate.ps1` в PowerShell, `source .venv/bin/activate` в Linux), но удобнее
+запускать команды через `uv run` — он сам использует окружение проекта.
+
+В `.gitignore` добавлены `.venv/`, каталоги сборки `site/` и `_build/` и кэши.
 
 ## 2. Каркас сайта и локальная сборка
 
@@ -83,9 +104,20 @@ deploy-ключом. Подробно — в разделе [P4](p4.md).
 - `version.txt` содержит хеш текущего коммита — значит, опубликована именно новая версия.
 
 Поиск работает локально (индекс `search/search_index.json` лежит на сайте), для него
-включены русский и английский языки. Формул на сайте нет, внешние шрифты Google Fonts
-отключены (`font: false`), иконки темы встроены в HTML как SVG — поэтому сайт не
-зависит от внешних CDN. Проверка — в разделе [T4](t4.md#no-cdn).
+включены русский и английский языки.
+
+Для проверки формул на страницу добавлена нумерованная формула. Вес страницы со всеми
+ресурсами складывается из веса самого сайта и внешних ресурсов:
+
+\begin{equation}
+W = W_{\text{site}} + \sum_{i=1}^{n} W_{\text{ext},i}
+\label{eq:weight}
+\end{equation}
+
+Формула \eqref{eq:weight} отрисована MathJax, который лежит на самом сайте
+(`javascripts/tex-svg.js`), а не загружается с CDN. Внешние шрифты Google Fonts
+отключены (`font: false`), иконки темы встроены в HTML как SVG — поэтому сайт, включая
+формулы, не зависит от внешних CDN. Проверка и замеры — в разделе [T4](t4.md#no-cdn).
 
 ## 7. Лицензии
 
